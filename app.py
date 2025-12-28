@@ -13,7 +13,7 @@ if not firebase_admin._apps:
     key_dict = dict(st.secrets["firebase"])
     cred = credentials.Certificate(key_dict)
     firebase_admin.initialize_app(cred, {
-        'storageBucket': 'TEN-PROJECT-CUA-BAN.appspot.com' # <--- Thay đúng tên bucket
+        'storageBucket': 'learning-with-kiwi.firebasestorage.app' # <--- Thay đúng tên bucket
     })
 
 db = firestore.client()
