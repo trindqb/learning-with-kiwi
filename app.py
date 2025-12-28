@@ -3,7 +3,7 @@ from audio_recorder_streamlit import audio_recorder
 import firebase_admin
 from firebase_admin import credentials, storage, firestore
 import time
-
+import uuid
 # --- 1. CẤU HÌNH HỆ THỐNG ---
 st.set_page_config(page_title="Hệ Thống Thi Trực Tuyến", layout="wide", page_icon="🏫")
 
@@ -31,75 +31,116 @@ def get_audio_url(path):
     """Lấy URL tạm thời (có hạn) để phát file private"""
     blob = bucket.blob(path)
     return blob.generate_signed_url(version="v4", expiration=3600)
+# --- UTILS ---
+def upload_to_storage(file_obj, folder_name):
+    """
+    Upload file lên Firebase Storage
+    Input: file_obj (từ st.file_uploader), folder_name (ví dụ 'images')
+    Output: Đường dẫn lưu trong DB (ví dụ: images/abc.jpg)
+    """
+    if file_obj is None:
+        return None
+    
+    # 1. Tạo tên file độc nhất (dùng thời gian + mã ngẫu nhiên)
+    # Lấy đuôi file (jpg, mp3...)
+    file_ext = file_obj.name.split(".")[-1]
+    file_name = f"{folder_name}/{int(time.time())}_{str(uuid.uuid4())[:8]}.{file_ext}"
+    
+    # 2. Upload
+    blob = bucket.blob(file_name)
+    blob.upload_from_string(file_obj.getvalue(), content_type=file_obj.type)
+    
+    return file_name
+
+def get_public_url(storage_path):
+    """Lấy link tạm (Signed URL) để hiển thị ảnh/audio private"""
+    if not storage_path:
+        return None
+    try:
+        blob = bucket.blob(storage_path)
+        # Link sống trong 1 giờ (3600s)
+        return blob.generate_signed_url(version="v4", expiration=3600)
+    except Exception as e:
+        return None
 
 # --- 3. GIAO DIỆN GIÁO VIÊN (ADMIN) ---
 def teacher_page():
     st.title("👩‍🏫 TRANG QUẢN LÝ CỦA GIÁO VIÊN")
     
-    # Bảo mật đơn giản bằng mật khẩu
-    password = st.text_input("Nhập mật khẩu quản trị:", type="password")
-    if password != "admin123": # Thay mật khẩu của bạn vào đây
-        st.warning("Vui lòng nhập đúng mật khẩu để thao tác.")
+    # --- ĐĂNG NHẬP (Giữ nguyên logic bảo mật của bạn) ---
+    password = st.text_input("Mật khẩu quản trị:", type="password")
+    # (Giả sử bạn đã xử lý hash ở đây, mình viết gọn để tập trung vào phần upload)
+    if password != "admin123": 
         return
 
     st.markdown("---")
     st.subheader("📝 Tạo Câu Hỏi Mới")
     
     with st.form("create_question_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"])
-            set_num = st.selectbox("Mã đề (Bộ đề):", [1, 2, 3])
-        with col2:
-            q_type = st.selectbox("Loại câu hỏi:", ["Trắc nghiệm (MC)", "Nghe (Listening)", "Nói (Speaking)", "Tự luận (Essay)"])
+        # 1. Thông tin chung
+        c1, c2, c3 = st.columns(3)
+        with c1: subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"])
+        with c2: set_num = st.selectbox("Mã đề:", [1, 2, 3])
+        with c3: q_type = st.selectbox("Loại câu:", ["Trắc nghiệm (MC)", "Nghe (Listening)", "Nói (Speaking)", "Tự luận (Essay)"])
         
-        content = st.text_area("Nội dung câu hỏi:", placeholder="Nhập đề bài vào đây...")
+        # 2. Nội dung câu hỏi
+        content = st.text_area("Đề bài (Câu hỏi):", placeholder="Ví dụ: Look at the picture and choose...")
         
-        # Logic riêng cho từng loại câu hỏi
+        # 3. KHU VỰC UPLOAD FILE (MỚI)
+        st.markdown("##### 📂 Đính kèm tệp (Nếu có)")
+        col_up1, col_up2 = st.columns(2)
+        
+        with col_up1:
+            # Upload ẢNH (Cho mọi loại câu hỏi)
+            image_file = st.file_uploader("📷 Hình ảnh minh họa (JPG, PNG)", type=["jpg", "png", "jpeg"])
+        
+        with col_up2:
+            # Upload MP3 (Chỉ hiện nếu là bài Nghe hoặc Trắc nghiệm có nghe)
+            audio_file = None
+            if q_type in ["Nghe (Listening)", "Trắc nghiệm (MC)"]:
+                audio_file = st.file_uploader("🎧 File âm thanh (MP3 < 3MB)", type=["mp3", "wav"])
+
+        # 4. Đáp án (Cho trắc nghiệm)
         options = []
         correct_ans = ""
-        audio_path = ""
-        
         if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
-            st.write("Nhập các đáp án lựa chọn (cách nhau bởi dấu phẩy):")
-            opts_str = st.text_input("Ví dụ: 10, 15, 20, 25", key="opts")
+            st.markdown("##### ✅ Đáp án")
+            opts_str = st.text_input("Các lựa chọn (cách nhau dấu phẩy):", placeholder="Apple, Banana, Orange")
             if opts_str:
                 options = [x.strip() for x in opts_str.split(",")]
-            correct_ans = st.text_input("Đáp án đúng (Copy y hệt 1 trong các lựa chọn trên):")
-        
-        uploaded_file = None
-        if q_type == "Nghe (Listening)":
-            uploaded_file = st.file_uploader("Upload file nghe (MP3 < 3MB):", type=["mp3"])
-            
-        submitted = st.form_submit_button("Lưu Câu Hỏi")
+            correct_ans = st.selectbox("Chọn đáp án ĐÚNG:", options if options else ["Chưa nhập option"])
+
+        # NÚT LƯU
+        submitted = st.form_submit_button("Lưu Câu Hỏi", type="primary")
         
         if submitted:
-            # Kiểm tra file size
-            if uploaded_file and uploaded_file.size > 3 * 1024 * 1024:
-                st.error("❌ File quá lớn! Vui lòng chọn file < 3MB.")
-            else:
-                with st.spinner("Đang lưu vào cơ sở dữ liệu..."):
-                    # 1. Upload Audio nếu có
-                    if uploaded_file:
-                        timestamp = int(time.time())
-                        fname = f"audio_de_thi/{subject}_de{set_num}_{timestamp}.mp3"
-                        audio_path = upload_file_to_storage(uploaded_file, fname)
-                    
-                    # 2. Lưu câu hỏi vào Firestore
-                    # Lưu ý: Không hardcode, lưu thẳng vào DB
-                    question_data = {
-                        "subject": subject,
-                        "set_number": set_num,
-                        "type": q_type,
-                        "content": content,
-                        "options": options,
-                        "correct_answer": correct_ans, # Lưu để chấm, nhưng HS không thấy
-                        "audio_path": audio_path,
-                        "created_at": firestore.SERVER_TIMESTAMP
-                    }
-                    db.collection("questions").add(question_data)
-                    st.success("✅ Đã thêm câu hỏi thành công!")
-
+            # Validate file size
+            if audio_file and audio_file.size > 3 * 1024 * 1024:
+                st.error("❌ File MP3 quá nặng (>3MB).")
+                st.stop()
+            
+            with st.spinner("Đang upload file và lưu dữ liệu..."):
+                # A. Upload file lên Firebase Storage
+                img_path = upload_to_storage(image_file, "question_images")
+                aud_path = upload_to_storage(audio_file, "question_audio")
+                
+                # B. Tạo dữ liệu JSON
+                question_data = {
+                    "subject": subject,
+                    "set_number": set_num,
+                    "type": q_type,
+                    "content": content,
+                    "options": options,
+                    "correct_answer": correct_ans,
+                    # Lưu đường dẫn storage (không phải link public)
+                    "image_path": img_path, 
+                    "audio_path": aud_path,
+                    "created_at": firestore.SERVER_TIMESTAMP
+                }
+                
+                # C. Đẩy vào Firestore
+                db.collection("questions").add(question_data)
+                st.success("✅ Đã tạo câu hỏi thành công!")
 # --- 4. GIAO DIỆN HỌC SINH (USER) ---
 def student_page():
     st.title("✍️ KHU VỰC THI HỌC SINH")
@@ -160,33 +201,40 @@ def student_page():
         user_answers = {}
         
         for idx, q in enumerate(questions_list):
-            st.markdown(f"**Câu {idx + 1}:** {q['content']}")
+            st.markdown(f"#### Câu {idx + 1}")
             
-            # Xử lý hiển thị theo loại
-            if q['type'] == "Nghe (Listening)" and q.get('audio_path'):
-                # Lấy link file nghe
-                try:
-                    audio_url = get_audio_url(q['audio_path'])
+            # --- 1. HIỂN THỊ FILE AUDIO (Nếu có) ---
+            if q.get('audio_path'):
+                audio_url = get_public_url(q['audio_path'])
+                if audio_url:
                     st.audio(audio_url)
-                except:
-                    st.error("Lỗi tải file nghe.")
+                else:
+                    st.error("Không tải được file nghe.")
 
+            # --- 2. HIỂN THỊ HÌNH ẢNH (Nếu có) ---
+            if q.get('image_path'):
+                img_url = get_public_url(q['image_path'])
+                if img_url:
+                    # Hiển thị ảnh chiều rộng vừa phải (400px)
+                    st.image(img_url, caption="Hình minh họa", width=400) 
+            
+            # --- 3. HIỂN THỊ NỘI DUNG VÀ LỰA CHỌN ---
+            st.write(q['content'])
+            
+            # (Phần hiển thị Radio button / Text area / Recorder giữ nguyên như cũ)
+            qid = q['id']
             if q['type'] in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
-                # Trắc nghiệm
-                choice = st.radio(
-                    "Chọn đáp án:", 
-                    q['options'], 
-                    key=f"q_{q['id']}",
-                    index=None
-                )
-                user_answers[q['id']] = choice
-                
-            elif q['type'] == "Tự luận (Essay)":
-                ans = st.text_area("Bài làm:", key=f"q_{q['id']}")
-                user_answers[q['id']] = ans
+                choice = st.radio("Chọn đáp án:", q.get('options', []), key=f"q_{qid}", index=None)
+                user_answers[qid] = choice
+            
+            elif q['type'] == "Nói (Speaking)":
+                 st.info("Ghi âm câu trả lời:")
+                 audio_bytes = audio_recorder(text="", recording_color="#e74c3c", neutral_color="#3498db", key=f"rec_{qid}")
+                 user_answers[qid] = audio_bytes
+                 if audio_bytes: st.audio(audio_bytes, format='audio/wav')
 
-            # Lưu ý: Phần Speaking cần xử lý ngoài form (như bài trước)
-            # Để đơn giản trong ví dụ này, mình tập trung vào cơ chế DB
+            elif q['type'] == "Tự luận (Essay)":
+                user_answers[qid] = st.text_area("Bài làm:", key=f"q_{qid}")
             
             st.markdown("---")
         
