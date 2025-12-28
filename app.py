@@ -157,7 +157,7 @@ def edit_question_tab():
                         time.sleep(1)
                         st.rerun()
 # --- 3. GIAO DIỆN GIÁO VIÊN (ADMIN) ---
-def creat_question_interface():
+def create_question_interface():
     st.markdown("---")
     st.subheader("📝 Tạo Câu Hỏi Mới")
     # ... (Phần code form tạo câu hỏi cũ của bạn) ...
