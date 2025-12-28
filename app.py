@@ -79,7 +79,15 @@ def teacher_page():
         # 2. Lấy mã hash chuẩn từ Secrets
         # (Dùng .get để tránh lỗi nếu quên cấu hình)
         stored_hash = st.secrets.get("admin", {}).get("password_hash", "")
+        # --- CODE DEBUG (Xóa sau khi sửa xong) ---
+        st.warning("⚠️ CHẾ ĐỘ DEBUG (Chỉ hiện khi sửa lỗi)")
+        st.code(f"Mã Hash của mật khẩu bạn nhập: '{input_hash}'")
+        st.code(f"Mã Hash lưu trong Secrets:     '{stored_hash}'")
         
+        if input_hash == stored_hash:
+            st.write("✅ Hai mã khớp nhau -> Kết quả: TRUE")
+        else:
+            st.write("❌ Hai mã KHÔNG khớp -> Kết quả: FALSE")
         # 3. So sánh
         if input_hash == stored_hash:
             st.success("Đăng nhập thành công!")
