@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, storage, firestore
 import time
 import uuid
+import hashlib
 # --- 1. CẤU HÌNH HỆ THỐNG ---
 st.set_page_config(page_title="Hệ Thống Thi Trực Tuyến", layout="wide", page_icon="🏫")
 
