@@ -63,6 +63,136 @@ def get_public_url(storage_path):
         return blob.generate_signed_url(version="v4", expiration=3600)
     except Exception as e:
         return None
+def grading_tab():
+    st.subheader("💯 Chấm Bài Thi")
+
+    # --- BƯỚC 1: LỌC DANH SÁCH BÀI THI ---
+    c1, c2, c3 = st.columns(3)
+    with c1: filter_subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"], key="grade_sub")
+    with c2: filter_set = st.selectbox("Mã đề:", [1, 2, 3], key="grade_set")
+    with c3: filter_status = st.selectbox("Trạng thái:", ["Tất cả", "Chưa chấm (pending)", "Đã chấm (graded)"])
+
+    if st.button("📂 Tải danh sách bài thi"):
+        # Query Firestore
+        query = db.collection("submissions")\
+            .where("subject", "==", filter_subject)\
+            .where("set_number", "==", filter_set)
+        
+        if filter_status == "Chưa chấm (pending)":
+            query = query.where("status", "==", "pending")
+        elif filter_status == "Đã chấm (graded)":
+            query = query.where("status", "==", "graded")
+            
+        docs = query.stream()
+        # Lưu vào session state
+        st.session_state['grading_list'] = [doc.to_dict() | {"id": doc.id} for doc in docs]
+
+    # --- BƯỚC 2: CHỌN HỌC SINH ĐỂ CHẤM ---
+    if 'grading_list' in st.session_state and st.session_state['grading_list']:
+        submissions = st.session_state['grading_list']
+        
+        if not submissions:
+            st.info("Không tìm thấy bài thi nào.")
+        else:
+            # Tạo list hiển thị: "Tên HS - Điểm hiện tại - Trạng thái"
+            options_map = {f"{s['student_name']} ({s['student_id']}) - {s['status']}": i for i, s in enumerate(submissions)}
+            selected_label = st.selectbox("Chọn bài thi cần chấm:", list(options_map.keys()))
+            
+            # Lấy data bài thi
+            selected_sub = submissions[options_map[selected_label]]
+            sub_id = selected_sub['id']
+            answers = selected_sub['answers'] # Map chứa chi tiết câu trả lời
+
+            st.divider()
+            st.markdown(f"### 📝 Đang chấm: {selected_sub['student_name']}")
+            st.caption(f"Thời gian nộp: {selected_sub['submitted_at']}")
+
+            # --- BƯỚC 3: FORM CHẤM ĐIỂM CHI TIẾT ---
+            with st.form(f"grading_form_{sub_id}"):
+                total_new_score = 0.0
+                
+                # Duyệt qua từng câu trả lời trong Map answers
+                # Sort theo key (ID câu hỏi) để hiển thị thứ tự cho đẹp
+                sorted_qids = sorted(answers.keys())
+
+                for qid in sorted_qids:
+                    ans = answers[qid]
+                    q_type = ans.get('type', 'Unknown')
+                    
+                    st.markdown(f"**Câu hỏi ({q_type}):** {ans.get('question_content', 'Không có nội dung')}")
+                    
+                    # --- XỬ LÝ HIỂN THỊ THEO LOẠI ---
+                    
+                    # 1. TRẮC NGHIỆM (Máy đã chấm, GV chỉ xem lại)
+                    if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
+                        col_a, col_b = st.columns(2)
+                        with col_a: 
+                            st.write(f"HS chọn: **{ans.get('student_choice')}**")
+                        with col_b: 
+                            st.write(f"Đáp án đúng: `{ans.get('correct_choice')}`")
+                        
+                        # Cho phép sửa điểm nếu máy chấm sai (ít khi dùng)
+                        new_score = st.number_input(f"Điểm câu {qid}:", value=float(ans.get('score', 0)), step=0.25, key=f"score_{qid}")
+                        ans['score'] = new_score # Cập nhật vào dict tạm
+                    
+                    # 2. TỰ LUẬN (GV đọc và chấm)
+                    elif q_type == "Tự luận (Essay)":
+                        st.text_area("Bài làm của HS:", value=ans.get('student_text', ''), disabled=True)
+                        
+                        c_score, c_comment = st.columns([1, 3])
+                        with c_score:
+                            new_score = st.number_input(f"Chấm điểm (Max {ans.get('max_score', 1)}):", value=float(ans.get('score', 0)), step=0.25, key=f"score_{qid}")
+                        with c_comment:
+                            comment = st.text_input("Lời phê:", value=ans.get('teacher_comment', ''), key=f"cmt_{qid}")
+                        
+                        ans['score'] = new_score
+                        ans['teacher_comment'] = comment
+
+                    # 3. NÓI - SPEAKING (GV nghe và chấm)
+                    elif q_type == "Nói (Speaking)":
+                        audio_path = ans.get('audio_path')
+                        if audio_path:
+                            # Lấy link Signed URL để phát
+                            audio_url = get_public_url(audio_path)
+                            if audio_url:
+                                st.audio(audio_url)
+                            else:
+                                st.error("File lỗi hoặc đã bị xóa.")
+                        else:
+                            st.warning("Học sinh không ghi âm câu này.")
+
+                        c_score, c_comment = st.columns([1, 3])
+                        with c_score:
+                            new_score = st.number_input(f"Chấm điểm Nói (Max {ans.get('max_score', 1)}):", value=float(ans.get('score', 0)), step=0.25, key=f"score_{qid}")
+                        with c_comment:
+                            comment = st.text_input("Nhận xét phát âm/ngữ pháp:", value=ans.get('teacher_comment', ''), key=f"cmt_{qid}")
+                            
+                        ans['score'] = new_score
+                        ans['teacher_comment'] = comment
+                    
+                    total_new_score += ans['score']
+                    st.markdown("---")
+
+                # --- BƯỚC 4: LƯU TỔNG KẾT ---
+                st.subheader(f"📊 Tổng điểm: {total_new_score}")
+                
+                if st.form_submit_button("Lưu Kết Quả Chấm", type="primary"):
+                    with st.spinner("Đang lưu điểm số..."):
+                        # Cập nhật Firestore
+                        db.collection("submissions").document(sub_id).update({
+                            "answers": answers, # Lưu lại toàn bộ answers đã sửa điểm/comment
+                            "final_score": total_new_score,
+                            "status": "graded"  # Đổi trạng thái thành Đã chấm
+                        })
+                        st.success(f"Đã chấm xong cho {selected_sub['student_name']}! Điểm: {total_new_score}")
+                        
+                        # Update lại list bên ngoài để hiển thị trạng thái mới ngay lập tức
+                        selected_sub['status'] = 'graded'
+                        selected_sub['final_score'] = total_new_score
+                        time.sleep(1)
+                        st.rerun()
+
+
 def edit_question_tab():
     st.subheader("✏️ Chỉnh Sửa Câu Hỏi Đã Tạo")
     
@@ -246,15 +376,17 @@ def teacher_page():
         # 3. So sánh
         if input_hash == stored_hash:
             st.success("Đăng nhập thành công!")
-            tab1, tab2 = st.tabs(["➕ Tạo Câu Hỏi Mới", "✏️ Sửa Câu Hỏi Cũ"])
+            tab1, tab2, tab3 = st.tabs(["➕ Tạo Câu Hỏi", "✏️ Sửa Câu Hỏi", "💯 Chấm Bài Thi"])
 
             with tab1:
-                # Copy toàn bộ code "Tạo câu hỏi" cũ vào đây
-                create_question_interface() # (Giả sử bạn tách code cũ thành hàm này hoặc để nguyên code cũ)
+                # (Gọi hàm tạo câu hỏi cũ)
+                create_question_tab() # Bạn nên tách code cũ ra thành hàm này cho gọn
         
             with tab2:
-                # Gọi hàm sửa mình vừa viết ở trên
-                edit_question_tab()
+                edit_question_tab() 
+        
+            with tab3:
+                grading_tab() # <--- Tab mới thêm vào đây
         else:
             if input_password: # Chỉ báo lỗi nếu đã nhập gì đó
                 st.error("❌ Sai mật khẩu! Vui lòng thử lại.")
