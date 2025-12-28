@@ -67,11 +67,32 @@ def get_public_url(storage_path):
 def teacher_page():
     st.title("👩‍🏫 TRANG QUẢN LÝ CỦA GIÁO VIÊN")
     
-    # --- ĐĂNG NHẬP (Giữ nguyên logic bảo mật của bạn) ---
-    password = st.text_input("Mật khẩu quản trị:", type="password")
-    # (Giả sử bạn đã xử lý hash ở đây, mình viết gọn để tập trung vào phần upload)
-    if password != "admin123": 
-        return
+    # Ô nhập mật khẩu
+    input_password = st.text_input("Nhập mật khẩu quản trị:", type="password")
+    
+    # Nút đăng nhập
+    if st.button("Đăng nhập") or input_password:
+        # 1. Băm mật khẩu vừa nhập
+        input_hash = hashlib.sha256(input_password.encode()).hexdigest()
+        
+        # 2. Lấy mã hash chuẩn từ Secrets
+        # (Dùng .get để tránh lỗi nếu quên cấu hình)
+        stored_hash = st.secrets.get("admin", {}).get("password_hash", "")
+        
+        # 3. So sánh
+        if input_hash == stored_hash:
+            st.success("Đăng nhập thành công!")
+            # --- HIỂN THỊ NỘI DUNG QUẢN LÝ Ở DƯỚI ĐÂY ---
+            # (Copy toàn bộ phần code tạo câu hỏi, upload file... bỏ vào đây)
+            
+            st.markdown("---")
+            st.subheader("📝 Tạo Câu Hỏi Mới")
+            # ... (Phần code form tạo câu hỏi cũ của bạn) ...
+            
+        else:
+            if input_password: # Chỉ báo lỗi nếu đã nhập gì đó
+                st.error("❌ Sai mật khẩu! Vui lòng thử lại.")
+            st.stop() # Dừng chương trình, không hiện nội dung bên dưới
 
     st.markdown("---")
     st.subheader("📝 Tạo Câu Hỏi Mới")
