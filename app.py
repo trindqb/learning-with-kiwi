@@ -89,80 +89,80 @@ def teacher_page():
             st.markdown("---")
             st.subheader("📝 Tạo Câu Hỏi Mới")
             # ... (Phần code form tạo câu hỏi cũ của bạn) ...
+            st.markdown("---")
+            st.subheader("📝 Tạo Câu Hỏi Mới")
             
+            with st.form("create_question_form"):
+                # 1. Thông tin chung
+                c1, c2, c3 = st.columns(3)
+                with c1: subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"])
+                with c2: set_num = st.selectbox("Mã đề:", [1, 2, 3])
+                with c3: q_type = st.selectbox("Loại câu:", ["Trắc nghiệm (MC)", "Nghe (Listening)", "Nói (Speaking)", "Tự luận (Essay)"])
+                
+                # 2. Nội dung câu hỏi
+                content = st.text_area("Đề bài (Câu hỏi):", placeholder="Ví dụ: Look at the picture and choose...")
+                
+                # 3. KHU VỰC UPLOAD FILE (MỚI)
+                st.markdown("##### 📂 Đính kèm tệp (Nếu có)")
+                col_up1, col_up2 = st.columns(2)
+                
+                with col_up1:
+                    # Upload ẢNH (Cho mọi loại câu hỏi)
+                    image_file = st.file_uploader("📷 Hình ảnh minh họa (JPG, PNG)", type=["jpg", "png", "jpeg"])
+                
+                with col_up2:
+                    # Upload MP3 (Chỉ hiện nếu là bài Nghe hoặc Trắc nghiệm có nghe)
+                    audio_file = None
+                    if q_type in ["Nghe (Listening)", "Trắc nghiệm (MC)"]:
+                        audio_file = st.file_uploader("🎧 File âm thanh (MP3 < 3MB)", type=["mp3", "wav"])
+        
+                # 4. Đáp án (Cho trắc nghiệm)
+                options = []
+                correct_ans = ""
+                if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
+                    st.markdown("##### ✅ Đáp án")
+                    opts_str = st.text_input("Các lựa chọn (cách nhau dấu phẩy):", placeholder="Apple, Banana, Orange")
+                    if opts_str:
+                        options = [x.strip() for x in opts_str.split(",")]
+                    correct_ans = st.selectbox("Chọn đáp án ĐÚNG:", options if options else ["Chưa nhập option"])
+        
+                # NÚT LƯU
+                submitted = st.form_submit_button("Lưu Câu Hỏi", type="primary")
+                
+                if submitted:
+                    # Validate file size
+                    if audio_file and audio_file.size > 3 * 1024 * 1024:
+                        st.error("❌ File MP3 quá nặng (>3MB).")
+                        st.stop()
+                    
+                    with st.spinner("Đang upload file và lưu dữ liệu..."):
+                        # A. Upload file lên Firebase Storage
+                        img_path = upload_to_storage(image_file, "question_images")
+                        aud_path = upload_to_storage(audio_file, "question_audio")
+                        
+                        # B. Tạo dữ liệu JSON
+                        question_data = {
+                            "subject": subject,
+                            "set_number": set_num,
+                            "type": q_type,
+                            "content": content,
+                            "options": options,
+                            "correct_answer": correct_ans,
+                            # Lưu đường dẫn storage (không phải link public)
+                            "image_path": img_path, 
+                            "audio_path": aud_path,
+                            "created_at": firestore.SERVER_TIMESTAMP
+                        }
+                        
+                        # C. Đẩy vào Firestore
+                        db.collection("questions").add(question_data)
+                        st.success("✅ Đã tạo câu hỏi thành công!")
         else:
             if input_password: # Chỉ báo lỗi nếu đã nhập gì đó
                 st.error("❌ Sai mật khẩu! Vui lòng thử lại.")
             st.stop() # Dừng chương trình, không hiện nội dung bên dưới
 
-    st.markdown("---")
-    st.subheader("📝 Tạo Câu Hỏi Mới")
     
-    with st.form("create_question_form"):
-        # 1. Thông tin chung
-        c1, c2, c3 = st.columns(3)
-        with c1: subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"])
-        with c2: set_num = st.selectbox("Mã đề:", [1, 2, 3])
-        with c3: q_type = st.selectbox("Loại câu:", ["Trắc nghiệm (MC)", "Nghe (Listening)", "Nói (Speaking)", "Tự luận (Essay)"])
-        
-        # 2. Nội dung câu hỏi
-        content = st.text_area("Đề bài (Câu hỏi):", placeholder="Ví dụ: Look at the picture and choose...")
-        
-        # 3. KHU VỰC UPLOAD FILE (MỚI)
-        st.markdown("##### 📂 Đính kèm tệp (Nếu có)")
-        col_up1, col_up2 = st.columns(2)
-        
-        with col_up1:
-            # Upload ẢNH (Cho mọi loại câu hỏi)
-            image_file = st.file_uploader("📷 Hình ảnh minh họa (JPG, PNG)", type=["jpg", "png", "jpeg"])
-        
-        with col_up2:
-            # Upload MP3 (Chỉ hiện nếu là bài Nghe hoặc Trắc nghiệm có nghe)
-            audio_file = None
-            if q_type in ["Nghe (Listening)", "Trắc nghiệm (MC)"]:
-                audio_file = st.file_uploader("🎧 File âm thanh (MP3 < 3MB)", type=["mp3", "wav"])
-
-        # 4. Đáp án (Cho trắc nghiệm)
-        options = []
-        correct_ans = ""
-        if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
-            st.markdown("##### ✅ Đáp án")
-            opts_str = st.text_input("Các lựa chọn (cách nhau dấu phẩy):", placeholder="Apple, Banana, Orange")
-            if opts_str:
-                options = [x.strip() for x in opts_str.split(",")]
-            correct_ans = st.selectbox("Chọn đáp án ĐÚNG:", options if options else ["Chưa nhập option"])
-
-        # NÚT LƯU
-        submitted = st.form_submit_button("Lưu Câu Hỏi", type="primary")
-        
-        if submitted:
-            # Validate file size
-            if audio_file and audio_file.size > 3 * 1024 * 1024:
-                st.error("❌ File MP3 quá nặng (>3MB).")
-                st.stop()
-            
-            with st.spinner("Đang upload file và lưu dữ liệu..."):
-                # A. Upload file lên Firebase Storage
-                img_path = upload_to_storage(image_file, "question_images")
-                aud_path = upload_to_storage(audio_file, "question_audio")
-                
-                # B. Tạo dữ liệu JSON
-                question_data = {
-                    "subject": subject,
-                    "set_number": set_num,
-                    "type": q_type,
-                    "content": content,
-                    "options": options,
-                    "correct_answer": correct_ans,
-                    # Lưu đường dẫn storage (không phải link public)
-                    "image_path": img_path, 
-                    "audio_path": aud_path,
-                    "created_at": firestore.SERVER_TIMESTAMP
-                }
-                
-                # C. Đẩy vào Firestore
-                db.collection("questions").add(question_data)
-                st.success("✅ Đã tạo câu hỏi thành công!")
 # --- 4. GIAO DIỆN HỌC SINH (USER) ---
 def student_page():
     st.title("✍️ KHU VỰC THI HỌC SINH")
