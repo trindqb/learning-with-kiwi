@@ -8,6 +8,7 @@ import hashlib
 import re
 from datetime import datetime, timedelta
 
+
 # ========================
 # 1. CẤU HÌNH HỆ THỐNG
 # ========================
@@ -422,23 +423,23 @@ def edit_question_tab():
                     
                     with st.spinner("Đang cập nhật..."):
                         # Logic Upload file mới (nếu người dùng có chọn file)
-                        if new_image:
+                        # if new_image:
                             # Upload file mới và lấy đường dẫn mới
-                            new_img_path = upload_to_storage(new_image, "question_images")
-                            update_data["image_path"] = new_img_path
+                            #new_img_path = upload_to_storage(new_image, "question_images")
+                            #update_data["image_path"] = new_img_path
                             # (Nâng cao: Có thể code thêm đoạn xóa file cũ trên Storage để tiết kiệm dung lượng)
                         
-                        if new_audio:
-                            new_aud_path = upload_to_storage(new_audio, "question_audio")
-                            update_data["audio_path"] = new_aud_path
+                        # if new_audio:
+                        #     new_aud_path = upload_to_storage(new_audio, "question_audio")
+                        #     update_data["audio_path"] = new_aud_path
 
                         # Lệnh Update của Firestore
-                        db.collection("questions").document(q_id).update(update_data)
+                        # db.collection("questions").document(q_id).update(update_data)
                         
-                        st.success("✅ Đã sửa thành công! Vui lòng bấm 'Tìm kiếm' lại để thấy thay đổi.")
+                        # st.success("✅ Đã sửa thành công! Vui lòng bấm 'Tìm kiếm' lại để thấy thay đổi.")
                         # Xóa cache để reload lại list
-                        del st.session_state['edit_list']
-                        time.sleep(1)
+                        # del st.session_state['edit_list']
+                        # time.sleep(1)
                         st.rerun()
 
 def teacher_page():
