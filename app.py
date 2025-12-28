@@ -63,8 +63,172 @@ def get_public_url(storage_path):
         return blob.generate_signed_url(version="v4", expiration=3600)
     except Exception as e:
         return None
+def edit_question_tab():
+    st.subheader("✏️ Chỉnh Sửa Câu Hỏi Đã Tạo")
+    
+    # BƯỚC 1: LỌC CÂU HỎI ĐỂ TÌM
+    col1, col2 = st.columns(2)
+    with col1:
+        find_subject = st.selectbox("Chọn Môn cần sửa:", ["Toán", "Tiếng Việt", "Tiếng Anh"], key="find_sub")
+    with col2:
+        find_set = st.selectbox("Chọn Mã đề cần sửa:", [1, 2, 3], key="find_set")
+    
+    if st.button("🔍 Tìm kiếm câu hỏi"):
+        # Lưu kết quả tìm kiếm vào session state để không bị mất khi reload
+        questions_ref = db.collection("questions")\
+            .where("subject", "==", find_subject)\
+            .where("set_number", "==", find_set)\
+            .stream()
+        
+        # Chuyển thành list và lưu ID
+        st.session_state['edit_list'] = [doc.to_dict() | {"id": doc.id} for doc in questions_ref]
 
+    # BƯỚC 2: HIỂN THỊ DANH SÁCH ĐỂ CHỌN
+    if 'edit_list' in st.session_state and st.session_state['edit_list']:
+        q_list = st.session_state['edit_list']
+        
+        if len(q_list) == 0:
+            st.warning("Không tìm thấy câu hỏi nào.")
+        else:
+            # Tạo dictionary để mapping tên hiển thị -> ID câu hỏi
+            # Hiển thị: "Câu 1: Nội dung..." (tạm tính theo index)
+            q_options = {f"({q['type']}) {q['content'][:50]}...": idx for idx, q in enumerate(q_list)}
+            
+            selected_label = st.selectbox("Chọn câu hỏi muốn sửa:", list(q_options.keys()))
+            
+            # Lấy data câu hỏi được chọn
+            selected_index = q_options[selected_label]
+            q_data = q_list[selected_index]
+            q_id = q_data['id']
+
+            st.markdown("---")
+            st.write(f"Đang sửa ID: `{q_id}`")
+
+            # BƯỚC 3: FORM SỬA DỮ LIỆU (PRE-FILLED)
+            with st.form(f"edit_form_{q_id}"):
+                # Load dữ liệu cũ vào các ô input (dùng tham số value=...)
+                new_content = st.text_area("Nội dung câu hỏi:", value=q_data.get('content', ''))
+                
+                # Xử lý options (List -> String)
+                old_opts = ", ".join(q_data.get('options', []))
+                new_opts_str = st.text_input("Các lựa chọn (cách nhau dấu phẩy):", value=old_opts)
+                
+                new_correct = st.text_input("Đáp án đúng:", value=q_data.get('correct_answer', ''))
+                
+                # --- XỬ LÝ FILE (ẢNH & AUDIO) ---
+                st.markdown("##### 📂 Cập nhật file (Bỏ qua nếu không muốn đổi)")
+                
+                # Ảnh
+                if q_data.get('image_path'):
+                    st.caption(f"Ảnh hiện tại: {q_data['image_path']}")
+                new_image = st.file_uploader("Thay ảnh mới (JPG/PNG):", type=["jpg", "png", "jpeg"])
+                
+                # Audio
+                if q_data.get('audio_path'):
+                    st.caption(f"Audio hiện tại: {q_data['audio_path']}")
+                new_audio = st.file_uploader("Thay audio mới (MP3):", type=["mp3", "wav"])
+
+                # NÚT CẬP NHẬT
+                if st.form_submit_button("Lưu Thay Đổi", type="primary"):
+                    update_data = {
+                        "content": new_content,
+                        "options": [x.strip() for x in new_opts_str.split(",")] if new_opts_str else [],
+                        "correct_answer": new_correct
+                    }
+                    
+                    with st.spinner("Đang cập nhật..."):
+                        # Logic Upload file mới (nếu người dùng có chọn file)
+                        if new_image:
+                            # Upload file mới và lấy đường dẫn mới
+                            new_img_path = upload_to_storage(new_image, "question_images")
+                            update_data["image_path"] = new_img_path
+                            # (Nâng cao: Có thể code thêm đoạn xóa file cũ trên Storage để tiết kiệm dung lượng)
+                        
+                        if new_audio:
+                            new_aud_path = upload_to_storage(new_audio, "question_audio")
+                            update_data["audio_path"] = new_aud_path
+
+                        # Lệnh Update của Firestore
+                        db.collection("questions").document(q_id).update(update_data)
+                        
+                        st.success("✅ Đã sửa thành công! Vui lòng bấm 'Tìm kiếm' lại để thấy thay đổi.")
+                        # Xóa cache để reload lại list
+                        del st.session_state['edit_list']
+                        time.sleep(1)
+                        st.rerun()
 # --- 3. GIAO DIỆN GIÁO VIÊN (ADMIN) ---
+def creat_question_interface():
+    st.markdown("---")
+    st.subheader("📝 Tạo Câu Hỏi Mới")
+    # ... (Phần code form tạo câu hỏi cũ của bạn) ...
+    st.markdown("---")
+    st.subheader("📝 Tạo Câu Hỏi Mới")
+    
+    with st.form("create_question_form"):
+        # 1. Thông tin chung
+        c1, c2, c3 = st.columns(3)
+        with c1: subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"])
+        with c2: set_num = st.selectbox("Mã đề:", [1, 2, 3])
+        with c3: q_type = st.selectbox("Loại câu:", ["Trắc nghiệm (MC)", "Nghe (Listening)", "Nói (Speaking)", "Tự luận (Essay)"])
+        
+        # 2. Nội dung câu hỏi
+        content = st.text_area("Đề bài (Câu hỏi):", placeholder="Ví dụ: Look at the picture and choose...")
+        
+        # 3. KHU VỰC UPLOAD FILE (MỚI)
+        st.markdown("##### 📂 Đính kèm tệp (Nếu có)")
+        col_up1, col_up2 = st.columns(2)
+        
+        with col_up1:
+            # Upload ẢNH (Cho mọi loại câu hỏi)
+            image_file = st.file_uploader("📷 Hình ảnh minh họa (JPG, PNG)", type=["jpg", "png", "jpeg"])
+        
+        with col_up2:
+            # Upload MP3 (Chỉ hiện nếu là bài Nghe hoặc Trắc nghiệm có nghe)
+            audio_file = None
+            if q_type in ["Nghe (Listening)", "Trắc nghiệm (MC)"]:
+                audio_file = st.file_uploader("🎧 File âm thanh (MP3 < 3MB)", type=["mp3", "wav"])
+
+        # 4. Đáp án (Cho trắc nghiệm)
+        options = []
+        correct_ans = ""
+        if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
+            st.markdown("##### ✅ Đáp án")
+            opts_str = st.text_input("Các lựa chọn (cách nhau dấu phẩy):", placeholder="Apple, Banana, Orange")
+            if opts_str:
+                options = [x.strip() for x in opts_str.split(",")]
+            correct_ans = st.selectbox("Chọn đáp án ĐÚNG:", options if options else ["Chưa nhập option"])
+
+        # NÚT LƯU
+        submitted = st.form_submit_button("Lưu Câu Hỏi", type="primary")
+        
+        if submitted:
+            # Validate file size
+            if audio_file and audio_file.size > 3 * 1024 * 1024:
+                st.error("❌ File MP3 quá nặng (>3MB).")
+                st.stop()
+            
+            with st.spinner("Đang upload file và lưu dữ liệu..."):
+                # A. Upload file lên Firebase Storage
+                img_path = upload_to_storage(image_file, "question_images")
+                aud_path = upload_to_storage(audio_file, "question_audio")
+                
+                # B. Tạo dữ liệu JSON
+                question_data = {
+                    "subject": subject,
+                    "set_number": set_num,
+                    "type": q_type,
+                    "content": content,
+                    "options": options,
+                    "correct_answer": correct_ans,
+                    # Lưu đường dẫn storage (không phải link public)
+                    "image_path": img_path, 
+                    "audio_path": aud_path,
+                    "created_at": firestore.SERVER_TIMESTAMP
+                }
+                
+                # C. Đẩy vào Firestore
+                db.collection("questions").add(question_data)
+                st.success("✅ Đã tạo câu hỏi thành công!")
 def teacher_page():
     st.title("👩‍🏫 TRANG QUẢN LÝ CỦA GIÁO VIÊN")
     
@@ -82,80 +246,15 @@ def teacher_page():
         # 3. So sánh
         if input_hash == stored_hash:
             st.success("Đăng nhập thành công!")
-            # --- HIỂN THỊ NỘI DUNG QUẢN LÝ Ở DƯỚI ĐÂY ---
-            # (Copy toàn bộ phần code tạo câu hỏi, upload file... bỏ vào đây)
-            
-            st.markdown("---")
-            st.subheader("📝 Tạo Câu Hỏi Mới")
-            # ... (Phần code form tạo câu hỏi cũ của bạn) ...
-            st.markdown("---")
-            st.subheader("📝 Tạo Câu Hỏi Mới")
-            
-            with st.form("create_question_form"):
-                # 1. Thông tin chung
-                c1, c2, c3 = st.columns(3)
-                with c1: subject = st.selectbox("Môn thi:", ["Toán", "Tiếng Việt", "Tiếng Anh"])
-                with c2: set_num = st.selectbox("Mã đề:", [1, 2, 3])
-                with c3: q_type = st.selectbox("Loại câu:", ["Trắc nghiệm (MC)", "Nghe (Listening)", "Nói (Speaking)", "Tự luận (Essay)"])
-                
-                # 2. Nội dung câu hỏi
-                content = st.text_area("Đề bài (Câu hỏi):", placeholder="Ví dụ: Look at the picture and choose...")
-                
-                # 3. KHU VỰC UPLOAD FILE (MỚI)
-                st.markdown("##### 📂 Đính kèm tệp (Nếu có)")
-                col_up1, col_up2 = st.columns(2)
-                
-                with col_up1:
-                    # Upload ẢNH (Cho mọi loại câu hỏi)
-                    image_file = st.file_uploader("📷 Hình ảnh minh họa (JPG, PNG)", type=["jpg", "png", "jpeg"])
-                
-                with col_up2:
-                    # Upload MP3 (Chỉ hiện nếu là bài Nghe hoặc Trắc nghiệm có nghe)
-                    audio_file = None
-                    if q_type in ["Nghe (Listening)", "Trắc nghiệm (MC)"]:
-                        audio_file = st.file_uploader("🎧 File âm thanh (MP3 < 3MB)", type=["mp3", "wav"])
+            tab1, tab2 = st.tabs(["➕ Tạo Câu Hỏi Mới", "✏️ Sửa Câu Hỏi Cũ"])
+
+            with tab1:
+                # Copy toàn bộ code "Tạo câu hỏi" cũ vào đây
+                create_question_interface() # (Giả sử bạn tách code cũ thành hàm này hoặc để nguyên code cũ)
         
-                # 4. Đáp án (Cho trắc nghiệm)
-                options = []
-                correct_ans = ""
-                if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
-                    st.markdown("##### ✅ Đáp án")
-                    opts_str = st.text_input("Các lựa chọn (cách nhau dấu phẩy):", placeholder="Apple, Banana, Orange")
-                    if opts_str:
-                        options = [x.strip() for x in opts_str.split(",")]
-                    correct_ans = st.selectbox("Chọn đáp án ĐÚNG:", options if options else ["Chưa nhập option"])
-        
-                # NÚT LƯU
-                submitted = st.form_submit_button("Lưu Câu Hỏi", type="primary")
-                
-                if submitted:
-                    # Validate file size
-                    if audio_file and audio_file.size > 3 * 1024 * 1024:
-                        st.error("❌ File MP3 quá nặng (>3MB).")
-                        st.stop()
-                    
-                    with st.spinner("Đang upload file và lưu dữ liệu..."):
-                        # A. Upload file lên Firebase Storage
-                        img_path = upload_to_storage(image_file, "question_images")
-                        aud_path = upload_to_storage(audio_file, "question_audio")
-                        
-                        # B. Tạo dữ liệu JSON
-                        question_data = {
-                            "subject": subject,
-                            "set_number": set_num,
-                            "type": q_type,
-                            "content": content,
-                            "options": options,
-                            "correct_answer": correct_ans,
-                            # Lưu đường dẫn storage (không phải link public)
-                            "image_path": img_path, 
-                            "audio_path": aud_path,
-                            "created_at": firestore.SERVER_TIMESTAMP
-                        }
-                        
-                        # C. Đẩy vào Firestore
-                        db.collection("questions").add(question_data)
-                        st.success("✅ Đã tạo câu hỏi thành công!")
+            with tab2:
+                # Gọi hàm sửa mình vừa viết ở trên
+                edit_question_tab()
         else:
             if input_password: # Chỉ báo lỗi nếu đã nhập gì đó
                 st.error("❌ Sai mật khẩu! Vui lòng thử lại.")
