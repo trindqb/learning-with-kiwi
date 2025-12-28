@@ -1,6 +1,8 @@
+"""
+Entry point - File chạy chính
+"""
 import streamlit as st
 from config import init_firebase
-from auth import AuthManager
 from pages import teacher_page, student_page
 
 # Khởi tạo

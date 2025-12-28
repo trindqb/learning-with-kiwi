@@ -1,3 +1,6 @@
+"""
+Các hàm tiện ích: Upload file, validate input
+"""
 import streamlit as st
 import re
 import uuid
@@ -71,4 +74,3 @@ class InputValidator:
             return ""
         text = re.sub(r'[<>\"\'%;()&+]', '', text)
         return text[:max_len].strip()
-

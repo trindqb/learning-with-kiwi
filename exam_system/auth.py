@@ -1,3 +1,6 @@
+"""
+Quản lý xác thực cho giáo viên và học sinh
+"""
 import streamlit as st
 import hashlib
 import time

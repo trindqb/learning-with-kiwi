@@ -1,14 +1,10 @@
+"""
+Router cho các trang chính
+"""
 import streamlit as st
 from auth import AuthManager
 from config import get_db
-from models import QuestionRepository, SubmissionRepository
-from components import (
-    TeacherLoginForm,
-    QuestionCreationForm,
-    QuestionEditForm,
-    GradingInterface,
-    StudentExamForm
-)
+from components import TeacherLoginForm, QuestionCreationForm, StudentExamForm
 
 def teacher_page():
     """Trang giáo viên"""
@@ -26,11 +22,7 @@ def teacher_page():
             auth.logout_teacher()
             st.rerun()
     
-    tab1, tab2, tab3 = st.tabs([
-        "➕ Tạo Câu Hỏi",
-        "✏️ Sửa Câu Hỏi",
-        "💯 Chấm Bài"
-    ])
+    tab1, tab2 = st.tabs(["➕ Tạo Câu Hỏi", "💯 Chấm Bài"])
     
     db = get_db()
     
@@ -38,10 +30,7 @@ def teacher_page():
         QuestionCreationForm.render(db)
     
     with tab2:
-        QuestionEditForm.render(db)
-    
-    with tab3:
-        GradingInterface.render(db)
+        st.info("Chức năng đang phát triển...")
 
 
 def student_page():
@@ -54,7 +43,6 @@ def student_page():
     if 'student_info' not in st.session_state:
         st.session_state['student_info'] = None
     
-    # Chưa đăng nhập
     if not st.session_state['student_info']:
         with st.form("student_login"):
             code = st.text_input("Mã số học sinh:")
@@ -68,7 +56,6 @@ def student_page():
                     st.error(msg)
         return
     
-    # Đã đăng nhập
     student = st.session_state['student_info']
     st.success(f"**{student['name']}** - Lớp {student.get('class', 'N/A')}")
     
