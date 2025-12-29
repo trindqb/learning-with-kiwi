@@ -102,6 +102,7 @@ class LoginForm:
     def _teacher_login_ui():
         """Form đăng nhập Giáo viên: Cần Username + Password"""
         from auth import AuthManager
+        from config import get_db
         
         st.write("#### 🛠️ Quản trị viên")
         
@@ -125,8 +126,8 @@ class LoginForm:
                 return
 
             with st.spinner("Đang đăng nhập..."):
-                # Cập nhật hàm authenticate_teacher nhận cả username
-                success, message = AuthManager.authenticate_teacher(username, password)
+                db = get_db()
+                success, message = AuthManager.authenticate_teacher(username, password, db)
                 
                 if success:
                     st.balloons()
