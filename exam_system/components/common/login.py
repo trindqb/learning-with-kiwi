@@ -1,29 +1,23 @@
-"""Form đăng nhập UI cải tiến"""
 import streamlit as st
 import time
 
 class LoginForm:
     @staticmethod
     def _apply_custom_css():
-        """Thêm CSS để làm đẹp giao diện"""
         st.markdown("""
             <style>
-                /* Ẩn menu mặc định của Streamlit để trông giống App hơn */
                 #MainMenu {visibility: hidden;}
                 footer {visibility: hidden;}
-                
-                /* Style cho Tiêu đề */
                 .login-title {
-                    font-size: 2.5rem !important;
+                    font-size: 2.2rem !important;
                     font-weight: 700 !important;
                     color: #1E88E5;
                     text-align: center;
-                    margin-bottom: 20px;
+                    margin-bottom: 10px;
                 }
-                
-                /* Style cho Card đăng nhập */
-                div.block-container {
-                    padding-top: 2rem;
+                /* Tùy chỉnh input field cho đẹp hơn */
+                .stTextInput > div > div > input {
+                    border-radius: 10px;
                 }
             </style>
         """, unsafe_allow_html=True)
@@ -32,16 +26,14 @@ class LoginForm:
     def render():
         LoginForm._apply_custom_css()
         
-        # Chia cột để form nằm gọn ở giữa màn hình (tỉ lệ 1-2-1 hoặc 1-1.5-1 tùy màn hình)
+        # Căn giữa form
         col1, col2, col3 = st.columns([1, 1.5, 1])
         
         with col2:
-            # Container tạo khung viền (Streamlit >= 1.29)
             with st.container(border=True):
-                st.markdown('<p class="login-title">🏫 E-Learning Portal</p>', unsafe_allow_html=True)
-                st.write("Chào mừng quay trở lại! Vui lòng đăng nhập.")
+                st.markdown('<p class="login-title">🏫 Hệ Thống Thi Online</p>', unsafe_allow_html=True)
                 
-                # Dùng Tabs thay vì Radio button nhìn hiện đại hơn
+                # Tabs chuyển đổi vai trò
                 tab_student, tab_teacher = st.tabs(["👨‍🎓 Học Sinh", "👨‍🏫 Giáo Viên"])
                 
                 with tab_student:
@@ -51,69 +43,103 @@ class LoginForm:
                     LoginForm._teacher_login_ui()
 
     @staticmethod
-    def _teacher_login_ui():
-        """Giao diện đăng nhập giáo viên"""
-        from auth import AuthManager
-        
-        st.markdown("### 🔐 Cổng Giáo Viên")
-        
-        # Thêm icon vào label
-        password = st.text_input(
-            "Mật khẩu quản trị",
-            type="password",
-            placeholder="Nhập mật khẩu của bạn...",
-            help="Liên hệ admin nếu quên mật khẩu"
-        )
-        
-        st.markdown("---") # Đường kẻ phân cách
-        
-        # Nút bấm full chiều rộng
-        if st.button("Đăng Nhập Ngay", key="teacher_login_btn", type="primary", use_container_width=True):
-            if not password:
-                st.toast("⚠️ Vui lòng nhập mật khẩu!") # Dùng toast thay vì error nhìn nhẹ nhàng hơn
-            else:
-                with st.spinner("Đang xác thực..."):
-                    time.sleep(0.5) # Giả lập delay để tạo cảm giác xử lý
-                    success, message = AuthManager.authenticate_teacher(password)
-                    if success:
-                        st.balloons() # Hiệu ứng chúc mừng
-                        st.success(message)
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(message)
-
-    @staticmethod
     def _student_login_ui():
-        """Giao diện đăng nhập học sinh"""
+        """Form đăng nhập Học sinh: Cần Mã HS + Mật khẩu"""
         from auth import AuthManager
         from config import get_db
         
-        st.markdown("### 📚 Cổng Học Sinh")
+        st.write("#### 🔐 Đăng nhập làm bài")
         
+        # 1. Nhập Mã Học Sinh (Tài khoản)
         student_code = st.text_input(
-            "Mã số học sinh (ID)",
-            placeholder="VD: HS001",
-            max_chars=10,
-            help="Mã số được in trên thẻ học sinh"
+            "Mã Học Sinh", 
+            placeholder="Ví dụ: HS001", 
+            key="std_user"
         )
         
-        st.markdown("---")
+        # 2. Nhập Mật Khẩu (Mới thêm)
+        password = st.text_input(
+            "Mật khẩu", 
+            type="password", 
+            placeholder="Nhập mật khẩu cá nhân", 
+            key="std_pass"
+        )
         
-        if st.button("Vào Phòng Thi", key="student_login_btn", type="primary", use_container_width=True):
-            if not student_code:
-                st.toast("⚠️ Vui lòng nhập mã học sinh!")
-            else:
-                try:
-                    with st.spinner("Đang kết nối CSDL..."):
-                        db = get_db()
-                        success, message = AuthManager.login_student(student_code, db)
+        if st.button("Vào Phòng Thi", key="btn_std_login", type="primary", use_container_width=True):
+            # Validate nhập liệu
+            if not student_code or not password:
+                st.toast("⚠️ Vui lòng nhập đầy đủ Mã HS và Mật khẩu!")
+                return
+
+            try:
+                with st.spinner("Đang xác thực thông tin..."):
+                    db = get_db()
+                    
+                    # LƯU Ý: Bạn cần cập nhật hàm login_student trong auth.py 
+                    # để nhận thêm tham số password: login_student(code, password, db)
+                    success, message = AuthManager.login_student(student_code, password, db) 
+                    
+                    if success:
+                        st.success("Đăng nhập thành công!")
                         
-                        if success:
-                            st.success(message)
-                            time.sleep(0.5)
-                            st.rerun()
-                        else:
-                            st.error(message)
-                except Exception as e:
-                    st.error(f"❌ Lỗi hệ thống: {str(e)}")
+                        # --- LƯU SESSION CHO HEADER ---
+                        st.session_state["user"] = {
+                            "full_name": message,  # Giả sử hàm trả về tên HS
+                            "role": "student",
+                            "student_code": student_code
+                        }
+                        
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(message)
+            except Exception as e:
+                # Fallback nếu hàm login cũ chưa sửa (chỉ nhận 2 tham số)
+                st.error(f"Lỗi hệ thống (Auth): {str(e)}")
+                st.info("💡 Gợi ý: Hãy cập nhật hàm AuthManager.login_student để nhận thêm mật khẩu.")
+
+    @staticmethod
+    def _teacher_login_ui():
+        """Form đăng nhập Giáo viên: Cần Username + Password"""
+        from auth import AuthManager
+        
+        st.write("#### 🛠️ Quản trị viên")
+        
+        # 1. Nhập Tên đăng nhập (Mới thêm)
+        username = st.text_input(
+            "Tên đăng nhập", 
+            placeholder="admin / gv01",
+            key="teach_user"
+        )
+        
+        # 2. Nhập Mật Khẩu
+        password = st.text_input(
+            "Mật khẩu", 
+            type="password", 
+            key="teach_pass"
+        )
+        
+        if st.button("Đăng Nhập Quản Trị", key="btn_teach_login", type="primary", use_container_width=True):
+            if not username or not password:
+                st.toast("⚠️ Vui lòng nhập Tên đăng nhập và Mật khẩu!")
+                return
+
+            with st.spinner("Đang đăng nhập..."):
+                # Cập nhật hàm authenticate_teacher nhận cả username
+                success, message = AuthManager.authenticate_teacher(username, password)
+                
+                if success:
+                    st.balloons()
+                    st.success(message)
+                    
+                    # --- LƯU SESSION CHO HEADER ---
+                    st.session_state["user"] = {
+                        "full_name": message if message else "Giáo Viên",
+                        "role": "teacher",
+                        "id": username
+                    }
+                    
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error(message)
