@@ -3,7 +3,7 @@ Entry point - File chạy chính
 """
 import streamlit as st
 from config import init_firebase
-from pages import teacher_page, student_page
+from pages import teacher_page, student_page, login_page
 
 # Khởi tạo
 init_firebase()
@@ -13,10 +13,18 @@ st.set_page_config(
     page_icon="🏫"
 )
 
-# Router
-role = st.sidebar.radio("Vai trò:", ["Học sinh", "Giáo viên"])
+# Initialize session state
+if 'user_role' not in st.session_state:
+    st.session_state['user_role'] = None
 
-if role == "Giáo viên":
+# Check if user is logged in
+is_teacher_logged_in = st.session_state.get('teacher_authenticated', False)
+is_student_logged_in = st.session_state.get('student_info') is not None
+
+# Router logic
+if is_teacher_logged_in:
     teacher_page()
-else:
+elif is_student_logged_in:
     student_page()
+else:
+    login_page()
