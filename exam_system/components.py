@@ -66,10 +66,12 @@ class QuestionCreationForm:
             options = []
             correct = ""
             if q_type in ["Trắc nghiệm (MC)", "Nghe (Listening)"]:
-                opts_str = st.text_input("Các lựa chọn (phân cách bằng dấu phẩy):")
+                opts_str = st.text_input("Các lựa chọn (phân cách bằng dấu |):")
                 if opts_str:
-                    options = [InputValidator.sanitize(x) for x in opts_str.split(",")]
-                correct = st.selectbox("Đáp án đúng:", options or ["Chưa nhập"])
+                    options = [InputValidator.sanitize(x.strip()) for x in opts_str.split("|")]
+                # Allow user to input correct answer manually or select from suggestions
+                correct = st.text_input("Đáp án đúng (nhập thủ công hoặc chọn từ danh sách):", 
+                                       placeholder="VD: Option A hoặc text trực tiếp")
             
             if st.form_submit_button("💾 Lưu", type="primary"):
                 if not content.strip():
