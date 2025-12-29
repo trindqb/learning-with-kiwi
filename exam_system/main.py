@@ -1,9 +1,16 @@
 """
 Entry point - File chạy chính
 """
+import sys
+from pathlib import Path
+
 import streamlit as st
 from config import init_firebase
-from pages import teacher_page, student_page, login_page
+from components.common.login import LoginForm
+
+# Add parent directory to path to import pages module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from pages import teacher_page, student_page
 
 # Khởi tạo
 init_firebase()
@@ -27,4 +34,4 @@ if is_teacher_logged_in:
 elif is_student_logged_in:
     student_page()
 else:
-    login_page()
+    LoginForm.render()

@@ -2,8 +2,8 @@
 Router cho các trang chính
 """
 import streamlit as st
-from auth import AuthManager
-from config import get_db
+from components import AuthManager
+from components import get_db
 from components import TeacherLoginForm, QuestionCreationForm, StudentExamForm
 import time
 
