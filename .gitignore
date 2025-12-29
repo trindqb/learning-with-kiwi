@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 */.streamlit/secrets.toml
-*/setup_project.py
+*/exam_system/setup_project.py
