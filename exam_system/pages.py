@@ -14,7 +14,7 @@ def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.markdown("<h1 style='text-align: center;'>🏫 HỆ THỐNG THI TRỰC TUYẾN</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>🏫 HỆ THỐNG HỌC VÀ THI CÙNG KIWI</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: gray;'>Chọn vai trò của bạn để tiếp tục</p>", unsafe_allow_html=True)
         
         st.divider()
